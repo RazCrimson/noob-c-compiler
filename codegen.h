@@ -29,7 +29,7 @@ class CodeGenBlock {
 public:
     BasicBlock *block;
     Value *returnValue;
-    std::map<std::string, Value*> locals;
+    std::map<std::string, Value *> locals;
 };
 
 class CodeGenContext {
@@ -39,14 +39,30 @@ class CodeGenContext {
 public:
 
     Module *module;
+
     CodeGenContext() { module = new Module("main", MyContext); }
-    
-    void generateCode(NBlock& root);
+
+    void generateCode(NBlock &root);
+
     GenericValue runCode();
-    std::map<std::string, Value*>& locals() { return blocks.top()->locals; }
+
+    std::map<std::string, Value *> &locals() { return blocks.top()->locals; }
+
     BasicBlock *currentBlock() { return blocks.top()->block; }
-    void pushBlock(BasicBlock *block) { blocks.push(new CodeGenBlock()); blocks.top()->returnValue = NULL; blocks.top()->block = block; }
-    void popBlock() { CodeGenBlock *top = blocks.top(); blocks.pop(); delete top; }
+
+    void pushBlock(BasicBlock *block) {
+        blocks.push(new CodeGenBlock());
+        blocks.top()->returnValue = NULL;
+        blocks.top()->block = block;
+    }
+
+    void popBlock() {
+        CodeGenBlock *top = blocks.top();
+        blocks.pop();
+        delete top;
+    }
+
     void setCurrentReturnValue(Value *value) { blocks.top()->returnValue = value; }
-    Value* getCurrentReturnValue() { return blocks.top()->returnValue; }
+
+    Value *getCurrentReturnValue() { return blocks.top()->returnValue; }
 };

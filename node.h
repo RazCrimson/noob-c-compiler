@@ -67,6 +67,16 @@ public:
     virtual llvm::Value *codeGen(CodeGenContext &context);
 };
 
+class NUnaryOperator : public NExpression {
+public:
+    int op;
+    NExpression &operand;
+
+    NUnaryOperator(int op, NExpression &operand) : operand(operand), op(op) {}
+
+    virtual llvm::Value *codeGen(CodeGenContext &context);
+};
+
 class NBinaryOperator : public NExpression {
 public:
     int op;

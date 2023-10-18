@@ -1,7 +1,7 @@
 %{
 	#include "node.h"
-        #include <cstdio>
-        #include <cstdlib>
+    #include <cstdio>
+    #include <cstdlib>
 	NBlock *programBlock; /* the top level root node of our final AST */
 
 	extern int yylex();
@@ -28,6 +28,7 @@
  */
 %token <string> TIDENTIFIER TINTEGER TDOUBLE
 %token <token> TCEQ TCNE TCLT TCLE TCGT TCGE TEQUAL
+%token <token> TLOGAND TLOGOR TLOGNOT
 %token <token> TLPAREN TRPAREN TLBRACE TRBRACE TCOMMA TDOT
 %token <token> TPLUS TMINUS TMUL TDIV
 %token <token> TRETURN TEXTERN
@@ -44,11 +45,18 @@
 %type <exprvec> call_args
 %type <block> program stmts block
 %type <stmt> stmt var_decl func_decl extern_decl
-%type <token> comparison
 
-/* Operator precedence for mathematical operators */
+/* Operator precedence */
+%right TEQUAL
+%right TLOGNOT
+%left TLOGOR
+%left TLOGAND
+%left TCEQ TCNE
+%left TCLT TCLE TCGT TCGE 
 %left TPLUS TMINUS
 %left TMUL TDIV
+
+%nonassoc UMINUS
 
 %start program
 
@@ -63,7 +71,7 @@ stmts : stmt { $$ = new NBlock(); $$->statements.push_back($<stmt>1); }
 
 stmt : var_decl TSEMICOLN
 	 | func_decl 
-	 | extern_decl TSEMICOLN
+	 | extern_decl
 	 | expr TSEMICOLN { $$ = new NExpressionStatement(*$1); }
 	 | TRETURN expr TSEMICOLN { $$ = new NReturnStatement(*$2); }
      ;
@@ -76,7 +84,7 @@ var_decl : ident ident { $$ = new NVariableDeclaration(*$1, *$2); }
 		 | ident ident TEQUAL expr { $$ = new NVariableDeclaration(*$1, *$2, $4); }
 		 ;
 
-extern_decl : TEXTERN ident ident TLPAREN func_decl_args TRPAREN
+extern_decl : TEXTERN ident ident TLPAREN func_decl_args TRPAREN TSEMICOLN
                 { $$ = new NExternDeclaration(*$2, *$3, *$5); delete $5; }
             ;
 
@@ -96,23 +104,32 @@ numeric : TINTEGER { $$ = new NInteger(atol($1->c_str())); delete $1; }
 		| TDOUBLE { $$ = new NDouble(atof($1->c_str())); delete $1; }
 		;
 	
-expr : ident TEQUAL expr { $$ = new NAssignment(*$<ident>1, *$3); }
-	 | ident TLPAREN call_args TRPAREN { $$ = new NMethodCall(*$1, *$3); delete $3; }
-	 | ident { $<ident>$ = $1; }
-	 | numeric
-         | expr TMUL expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
-         | expr TDIV expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
-         | expr TPLUS expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
-         | expr TMINUS expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
- 	 | expr comparison expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
-     | TLPAREN expr TRPAREN { $$ = $2; }
-	 ;
+expr:
+	numeric
+	| ident { $<ident>$ = $1; }
+    | TLPAREN expr TRPAREN { $$ = $2; }
+	| TLOGNOT expr { $$ = new NUnaryOperator($1, *$2); }
+	| TMINUS expr %prec UMINUS { $$ = new NUnaryOperator($1, *$2); }
+	| expr TPLUS expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TMINUS expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TMUL expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TDIV expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TCEQ expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TCNE expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TCLT expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TCLE expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TCGT expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TCGE expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TLOGOR expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| expr TLOGAND expr { $$ = new NBinaryOperator(*$1, $2, *$3); }
+	| ident TEQUAL expr { $$ = new NAssignment(*$<ident>1, *$3); }
+	| ident TLPAREN call_args TRPAREN { $$ = new NMethodCall(*$1, *$3); delete $3; }
+	;
 	
 call_args : /*blank*/  { $$ = new ExpressionList(); }
 		  | expr { $$ = new ExpressionList(); $$->push_back($1); }
 		  | call_args TCOMMA expr  { $1->push_back($3); }
 		  ;
 
-comparison : TCEQ | TCNE | TCLT | TCLE | TCGT | TCGE;
 
 %%

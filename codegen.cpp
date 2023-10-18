@@ -91,30 +91,98 @@ Value *NMethodCall::codeGen(CodeGenContext &context) {
     return call;
 }
 
-Value *NBinaryOperator::codeGen(CodeGenContext &context) {
+Value *NUnaryOperator::codeGen(CodeGenContext &context) {
+    std::cout << "Creating unary operation " << op << endl;
 
+    Value *value = operand.codeGen(context);
+    bool hasFloatComponent = value->getType()->isFloatingPointTy();
+
+    Instruction::UnaryOps instr;
+    switch (op) {
+        case TMINUS:
+            if (hasFloatComponent) {
+                return UnaryOperator::Create(Instruction::FNeg, value, "", context.currentBlock());
+            } else {
+                Type *intType = Type::getInt64Ty(MyContext);
+                return BinaryOperator::Create(Instruction::Sub, ConstantInt::get(intType, 0), value, "",
+                                              context.currentBlock());
+            }
+
+        case TLOGNOT:
+            return value;
+
+    }
+    return NULL;
+}
+
+
+Value *NBinaryOperator::codeGen(CodeGenContext &context) {
     std::cout << "Creating binary operation " << op << endl;
+
+    // Generate code for the left-hand side and right-hand side expressions
+    Value *LHSValue = lhs.codeGen(context);
+    Value *RHSValue = rhs.codeGen(context);
+
+    // Ensure both LHS and RHS values are generated successfully
+    if (!LHSValue || !RHSValue) return nullptr; // Throw err
+
+    // Determine the type of comparison (integer or floating-point)
+    bool hasFloatComponent = LHSValue->getType()->isFloatingPointTy() || RHSValue->getType()->isFloatingPointTy();
+
     Instruction::BinaryOps instr;
     switch (op) {
         case TPLUS:
-            instr = Instruction::Add;
-            goto math;
+            instr = hasFloatComponent ? Instruction::FAdd : Instruction::Add;
+            break;
         case TMINUS:
-            instr = Instruction::Sub;
-            goto math;
+            instr = hasFloatComponent ? Instruction::FSub : Instruction::Sub;
+            break;
         case TMUL:
-            instr = Instruction::Mul;
-            goto math;
+            instr = hasFloatComponent ? Instruction::FMul : Instruction::Mul;
+            break;
         case TDIV:
-            instr = Instruction::SDiv;
-            goto math;
+            instr = hasFloatComponent ? Instruction::FDiv : Instruction::SDiv;
+            break;
 
-            /* TODO comparison */
+        case TLOGAND:
+            instr = Instruction::And;
+            break;
+        case TLOGOR:
+            instr = Instruction::Or;
+            break;
+        default:
+            goto compare_label;
     }
-    return NULL;
-    math:
-    return BinaryOperator::Create(instr, lhs.codeGen(context),
-                                  rhs.codeGen(context), "", context.currentBlock());
+    return BinaryOperator::Create(instr, LHSValue, RHSValue, "", context.currentBlock());
+
+    compare_label:
+    // Relational Operators
+    CmpInst::Predicate predicate;
+    switch (op) {
+        case TCEQ:
+            predicate = hasFloatComponent ? CmpInst::Predicate::FCMP_OEQ : CmpInst::Predicate::ICMP_EQ;
+            break;
+        case TCNE:
+            predicate = hasFloatComponent ? CmpInst::Predicate::FCMP_ONE : CmpInst::Predicate::ICMP_NE;
+            break;
+        case TCGE:
+            predicate = hasFloatComponent ? CmpInst::Predicate::FCMP_OGE : CmpInst::Predicate::ICMP_SGE;
+            break;
+        case TCGT:
+            predicate = hasFloatComponent ? CmpInst::Predicate::FCMP_OGT : CmpInst::Predicate::ICMP_SGT;
+            break;
+        case TCLE:
+            predicate = hasFloatComponent ? CmpInst::Predicate::FCMP_OLE : CmpInst::Predicate::ICMP_SLE;
+            break;
+        case TCLT:
+            predicate = hasFloatComponent ? CmpInst::Predicate::FCMP_OLT : CmpInst::Predicate::ICMP_SLT;
+            break;
+        default:
+            return NULL;
+    }
+    return CmpInst::Create(
+            hasFloatComponent ? Instruction::FCmp : Instruction::ICmp,
+            predicate, LHSValue, RHSValue, "", context.currentBlock());
 }
 
 Value *NAssignment::codeGen(CodeGenContext &context) {

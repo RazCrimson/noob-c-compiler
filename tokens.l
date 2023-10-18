@@ -5,6 +5,8 @@
 
 #define SAVE_TOKEN  yylval.string = new std::string(yytext, yyleng)
 #define TOKEN(t)    (yylval.token = t)
+
+void yyerror(char *);
 %}
 
 %option noyywrap
@@ -26,6 +28,11 @@
 ">"				          		return TOKEN(TCGT);
 ">="					          return TOKEN(TCGE);
 
+"&&"					        return TOKEN(TLOGAND);
+"||"					        return TOKEN(TLOGOR);
+"!"					            return TOKEN(TLOGNOT);
+
+
 "("	          					return TOKEN(TLPAREN);
 ")"					          	return TOKEN(TRPAREN);
 "{"         						return TOKEN(TLBRACE);
@@ -40,6 +47,10 @@
 "*"		          				return TOKEN(TMUL);
 "/"				          		return TOKEN(TDIV);
 
-.                       printf("Unknown token!\n"); yyterminate();
+.                      yyerror("invalid character"); yyterminate();
 
 %%
+
+void yyerror(char *s) {
+    fprintf(stderr, "line %d: %s\n", yylineno, s);
+}

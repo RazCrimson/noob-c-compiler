@@ -7,7 +7,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include "llvm/Pass.h"
-#include <llvm/IR/Instructions.h>
+#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/CallingConv.h>
 #include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/IR/IRBuilder.h>

@@ -3,3 +3,6 @@ parser.cpp
 parser.hpp
 tokens.cpp
 parser
+
+# Jetbrains IDEs
+.idea

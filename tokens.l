@@ -33,6 +33,7 @@
 
 "."         						return TOKEN(TDOT);
 ","				          		return TOKEN(TCOMMA);
+";"				          		return TOKEN(TSEMICOLN);
 
 "+"				          		return TOKEN(TPLUS);
 "-"		          				return TOKEN(TMINUS);

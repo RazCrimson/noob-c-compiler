@@ -13,16 +13,12 @@ extern int yyparse();
 
 extern NBlock *programBlock;
 
-void open_file(const char *filename) {
-    // openfile
-    freopen(filename, "r", stdin);
-}
-
 void createCoreFunctions(CodeGenContext &context);
 
 int main(int argc, char **argv) {
     if (argc > 1) {
-        open_file(argv[1]);
+        // Open the source file into stdin
+        freopen(argv[1], "r", stdin);
     }
     yyparse();
     cout << programBlock << endl;
@@ -80,7 +76,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    pass.run(*(context.module));
+    pass.run(*context.module);
     dest.flush();
 
     outs() << "Wrote " << Filename << "\n";

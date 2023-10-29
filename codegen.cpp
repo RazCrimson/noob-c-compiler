@@ -1,6 +1,8 @@
 #include "node.h"
 #include "codegen.h"
 #include "parser.hpp"
+#include "llvm/IR/Function.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace std;
 
@@ -9,25 +11,20 @@ void CodeGenContext::generateCode(NBlock &root) {
     std::cout << "Generating code...\n";
 
     /* Create the top level interpreter function to call as entry */
-    vector<Type *> argTypes;
-    FunctionType *ftype = FunctionType::get(Type::getVoidTy(MyContext), makeArrayRef(argTypes), false);
-    mainFunction = Function::Create(ftype, GlobalValue::ExternalLinkage, "main", module);
-    BasicBlock *bblock = BasicBlock::Create(MyContext, "entry", mainFunction, 0);
+    // vector<Type *> argTypes;
+    // FunctionType *ftype = FunctionType::get(Type::getVoidTy(MyContext), makeArrayRef(argTypes), false);
+    // mainFunction = Function::Create(ftype, GlobalValue::ExternalLinkage, "main", module);
+    BasicBlock *bblock = BasicBlock::Create(MyContext, "global");
 
     /* Push a new variable/block context */
     pushBlock(bblock);
     root.codeGen(*this); /* emit bytecode for the toplevel block */
-    ReturnInst::Create(MyContext, bblock);
+    // ReturnInst::Create(MyContext, currentBlock());
     popBlock();
-
-    /* Print the bytecode in a human-readable format
-       to see if our program compiled properly
-     */
-    std::cout << "Code is generated.\n";
-    // module->dump();
+   
+    std::cout << "Code Generation complete.\n";
 
     legacy::PassManager pm;
-    // TODO:
     pm.add(createPrintModulePass(outs()));
     pm.run(*module);
 }
@@ -124,10 +121,22 @@ Value *NBinaryOperator::codeGen(CodeGenContext &context) {
     Value *RHSValue = rhs.codeGen(context);
 
     // Ensure both LHS and RHS values are generated successfully
-    if (!LHSValue || !RHSValue) return nullptr; // Throw err
+    if (!LHSValue || !RHSValue) return NULL; // Throw err
 
     // Determine the type of comparison (integer or floating-point)
     bool hasFloatComponent = LHSValue->getType()->isFloatingPointTy() || RHSValue->getType()->isFloatingPointTy();
+
+    std::cout << "LHS: "  << LHSValue->getType()->getTypeID() << endl;
+    std::cout << "RHS: "  << RHSValue->getType()->getTypeID()  << endl;
+    std::cout << "Has Float"  << hasFloatComponent << endl;
+
+    if(hasFloatComponent && !LHSValue->getType()->isFloatingPointTy()) {
+        LHSValue = new SIToFPInst(LHSValue, Type::getDoubleTy(MyContext), "typeConv", context.currentBlock());
+    }
+    if(hasFloatComponent && !RHSValue->getType()->isFloatingPointTy()) {
+        RHSValue = new SIToFPInst(RHSValue, Type::getDoubleTy(MyContext), "typeConv", context.currentBlock());
+    }
+
 
     Instruction::BinaryOps instr;
     switch (op) {
@@ -210,6 +219,88 @@ Value *NExpressionStatement::codeGen(CodeGenContext &context) {
     return expression.codeGen(context);
 }
 
+Value *NConditionalStatement::codeGen(CodeGenContext &context) {
+    std::cout << "Generating if statement code for " << typeid(cond).name() << endl;
+    Value *CondV = cond.codeGen(context);
+    if (!CondV)
+        return NULL;
+
+    // Compare condition value with 0.
+    Builder.SetInsertPoint(context.currentBlock());
+    if (CondV->getType()->isFloatingPointTy()) {
+        CondV = Builder.CreateFCmpONE(CondV, ConstantFP::get(MyContext, APFloat(0.0)), "ifcond");
+    } else if (CondV->getType()->isIntegerTy()) {
+        CondV = Builder.CreateICmpNE(CondV, ConstantInt::get(MyContext, APInt(CondV->getType()->getIntegerBitWidth(), 0)), "ifcond");
+    } else {
+        std::cerr << "Unsupported type found in if condition"<< endl;
+        return NULL;
+    }
+
+    Function *TheFunction = Builder.GetInsertBlock()->getParent();
+
+    // Create blocks for the then, else and merge cases
+    BasicBlock *ThenBB = BasicBlock::Create(MyContext, "then", TheFunction);
+    BasicBlock *ElseBB = BasicBlock::Create(MyContext, "else", TheFunction);
+    BasicBlock *MergeBB = BasicBlock::Create(MyContext, "ifcont", TheFunction);
+
+    context.pushBlock(ThenBB, true);
+    thenBlock.codeGen(context);
+    context.popBlock();
+    Builder.SetInsertPoint(ThenBB);
+    Builder.CreateBr(MergeBB);
+
+    context.pushBlock(ElseBB, true);
+    elseBlock.codeGen(context);
+    context.popBlock();
+    Builder.SetInsertPoint(ElseBB);
+    Builder.CreateBr(MergeBB);
+
+    Builder.SetInsertPoint(context.currentBlock());
+    Builder.CreateCondBr(CondV, ThenBB, ElseBB);
+
+    context.replaceBlock(MergeBB);
+    return CondV;
+}
+
+Value *NLoopStatement::codeGen(CodeGenContext &context) {
+    std::cout << "Generating loop statement code for " << typeid(cond).name() << endl;
+
+    Builder.SetInsertPoint(context.currentBlock());
+    Function *TheFunction = Builder.GetInsertBlock()->getParent();
+
+    // Create blocks for the conditional, body and after loop cases
+    BasicBlock *ConditionBB = BasicBlock::Create(MyContext, "condition", TheFunction);
+    BasicBlock *BodyBB = BasicBlock::Create(MyContext, "body", TheFunction);
+    BasicBlock *AfterLoopBB = BasicBlock::Create(MyContext, "afterloop", TheFunction);
+
+    Builder.CreateBr(ConditionBB);
+    
+    Builder.SetInsertPoint(ConditionBB);
+    context.pushBlock(ConditionBB, true);
+    Value *CondV = cond.codeGen(context);
+    context.popBlock();
+    if (!CondV)
+        return NULL;
+    if (CondV->getType()->isFloatingPointTy()) {
+        CondV = Builder.CreateFCmpONE(CondV, ConstantFP::get(MyContext, APFloat(0.0)), "ifcond");
+    } else if (CondV->getType()->isIntegerTy()) {
+        CondV = Builder.CreateICmpNE(CondV, ConstantInt::get(MyContext, APInt(CondV->getType()->getIntegerBitWidth(), 0)), "ifcond");
+    } else {
+        std::cerr << "Unsupported type found in if condition"<< endl;
+        return NULL;
+    }
+    Builder.CreateCondBr(CondV, BodyBB, AfterLoopBB);
+
+    Builder.SetInsertPoint(BodyBB);
+    context.pushBlock(BodyBB, true);
+    body.codeGen(context);
+    context.popBlock();
+    Builder.CreateBr(ConditionBB);
+
+    context.replaceBlock(AfterLoopBB);
+    return 0;
+}
+
 Value *NReturnStatement::codeGen(CodeGenContext &context) {
     std::cout << "Generating return code for " << typeid(expression).name() << endl;
     Value *returnValue = expression.codeGen(context);
@@ -246,7 +337,7 @@ Value *NFunctionDeclaration::codeGen(CodeGenContext &context) {
         argTypes.push_back(typeOf((**it).type));
     }
     FunctionType *ftype = FunctionType::get(typeOf(type), makeArrayRef(argTypes), false);
-    Function *function = Function::Create(ftype, GlobalValue::InternalLinkage, id.name.c_str(), context.module);
+    Function *function = Function::Create(ftype, GlobalValue::ExternalWeakLinkage, id.name.c_str(), context.module);
     BasicBlock *bblock = BasicBlock::Create(MyContext, "entry", function, 0);
 
     context.pushBlock(bblock);
@@ -263,7 +354,7 @@ Value *NFunctionDeclaration::codeGen(CodeGenContext &context) {
     }
 
     block.codeGen(context);
-    ReturnInst::Create(MyContext, context.getCurrentReturnValue(), bblock);
+    ReturnInst::Create(MyContext, context.getCurrentReturnValue(), context.currentBlock());
 
     context.popBlock();
     std::cout << "Creating function: " << id.name << endl;

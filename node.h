@@ -100,7 +100,7 @@ public:
     virtual llvm::Value *codeGen(CodeGenContext &context);
 };
 
-class NBlock : public NExpression {
+class NBlock : public NStatement {
 public:
     StatementList statements;
 
@@ -115,6 +115,28 @@ public:
 
     NExpressionStatement(NExpression &expression) :
             expression(expression) {}
+
+    virtual llvm::Value *codeGen(CodeGenContext &context);
+};
+
+class NConditionalStatement : public NStatement {
+public:
+    NExpression &cond;
+    NBlock &thenBlock;
+    NBlock &elseBlock;
+
+    NConditionalStatement(NExpression &cond, NBlock &thenBlock, NBlock &elseBlock) :
+            cond(cond), thenBlock(thenBlock), elseBlock(elseBlock) {}
+
+    virtual llvm::Value *codeGen(CodeGenContext &context);
+};
+
+class NLoopStatement : public NStatement {
+public:
+    NExpression &cond;
+    NBlock &body;
+
+    NLoopStatement(NExpression &cond, NBlock &body) : cond(cond), body(body) {}
 
     virtual llvm::Value *codeGen(CodeGenContext &context);
 };

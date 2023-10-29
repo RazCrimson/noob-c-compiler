@@ -14,6 +14,10 @@ void yyerror(char *);
 %%
 
 [ \t\n]					        ;
+
+"if"                            return TOKEN(IF);
+"else"                          return TOKEN(ELSE);
+"while"                         return TOKEN(WHILE);
 "extern"                        return TOKEN(TEXTERN);
 "return"				        return TOKEN(TRETURN);
 [a-zA-Z_][a-zA-Z0-9_]*  SAVE_TOKEN; return TIDENTIFIER;

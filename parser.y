@@ -32,7 +32,10 @@
 %token <token> TLPAREN TRPAREN TLBRACE TRBRACE TCOMMA TDOT
 %token <token> TPLUS TMINUS TMUL TDIV
 %token <token> TRETURN TEXTERN
-%token <token> TSEMICOLN
+%token <token> TSEMICOLN IF ELSE WHILE
+
+%nonassoc IFX
+%nonassoc ELSE
 
 /* Define the type of node our nonterminal symbols represent.
    The types refer to the %union declaration above. Ex: when
@@ -44,7 +47,7 @@
 %type <varvec> func_decl_args
 %type <exprvec> call_args
 %type <block> program stmts block
-%type <stmt> stmt var_decl func_decl extern_decl
+%type <stmt> stmt var_decl func_decl extern_decl conditional loop
 
 /* Operator precedence */
 %right TEQUAL
@@ -72,6 +75,8 @@ stmts : stmt { $$ = new NBlock(); $$->statements.push_back($<stmt>1); }
 stmt : var_decl TSEMICOLN
 	 | func_decl 
 	 | extern_decl
+	 | conditional
+	 | loop
 	 | expr TSEMICOLN { $$ = new NExpressionStatement(*$1); }
 	 | TRETURN expr TSEMICOLN { $$ = new NReturnStatement(*$2); }
      ;
@@ -83,6 +88,15 @@ block : TLBRACE stmts TRBRACE { $$ = $2; }
 var_decl : ident ident { $$ = new NVariableDeclaration(*$1, *$2); }
 		 | ident ident TEQUAL expr { $$ = new NVariableDeclaration(*$1, *$2, $4); }
 		 ;
+
+conditional:
+    IF TLPAREN expr TRPAREN block %prec IFX { $$ = new NConditionalStatement(*$3, *$5, * new NBlock()); }
+    | IF TLPAREN expr TRPAREN block ELSE block { $$ = new NConditionalStatement(*$3, *$5, *$7); }
+	;
+    
+loop: 
+	WHILE TLPAREN expr TRPAREN block { $$ = new NLoopStatement(*$3, *$5); }
+	;
 
 extern_decl : TEXTERN ident ident TLPAREN func_decl_args TRPAREN TSEMICOLN
                 { $$ = new NExternDeclaration(*$2, *$3, *$5); delete $5; }

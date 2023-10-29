@@ -24,12 +24,19 @@ using namespace llvm;
 class NBlock;
 
 static LLVMContext MyContext;
+static IRBuilder<> Builder(MyContext);
+
 
 class CodeGenBlock {
 public:
     BasicBlock *block;
     Value *returnValue;
-    std::map<std::string, Value *> locals;
+    std::map<std::string, Value *>& locals;
+
+    CodeGenBlock(): locals(*(new std::map<std::string, Value *>())) {}
+
+    CodeGenBlock(std::map<std::string, Value *>& parentLocals): locals(parentLocals) {}
+
 };
 
 class CodeGenContext {
@@ -50,10 +57,16 @@ public:
 
     BasicBlock *currentBlock() { return blocks.top()->block; }
 
-    void pushBlock(BasicBlock *block) {
-        blocks.push(new CodeGenBlock());
-        blocks.top()->returnValue = NULL;
-        blocks.top()->block = block;
+    void pushBlock(BasicBlock *block, bool inheritLocals = false) {
+        CodeGenBlock* newCodeBlock;
+        if(inheritLocals) {
+            newCodeBlock = new CodeGenBlock(locals());
+        } else {
+            newCodeBlock = new CodeGenBlock();
+        }
+        newCodeBlock->returnValue = NULL;
+        newCodeBlock->block = block;
+        blocks.push(newCodeBlock);
     }
 
     void popBlock() {
@@ -61,6 +74,15 @@ public:
         blocks.pop();
         delete top;
     }
+
+    void replaceBlock(BasicBlock *block) {
+        CodeGenBlock* newCodeBlock = new CodeGenBlock(locals());
+        newCodeBlock->returnValue = blocks.top()->returnValue;
+        newCodeBlock->block = block;
+        popBlock();
+        blocks.push(newCodeBlock);
+    }
+
 
     void setCurrentReturnValue(Value *value) { blocks.top()->returnValue = value; }
 

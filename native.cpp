@@ -1,6 +1,13 @@
 #include <cstdio>
 
-extern "C"
-void printi(long long val) {
-    printf("%lld\n", val);
+extern "C" {
+
+    void printInt(long long val) {
+        printf("%lld\n", val);
+    }
+
+    void printDouble(double val) {
+        printf("%lf\n", val);
+    }
+
 }

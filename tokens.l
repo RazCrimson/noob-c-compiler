@@ -11,8 +11,20 @@ void yyerror(char *);
 
 %option noyywrap
 
-%%
+%x	COMMENT COMMENT_END
 
+%%
+ /* Single-line comment */
+\/\/.*                          ;
+
+ /* Multiline comment */
+\/\*				            BEGIN COMMENT;
+<COMMENT>[^\*]
+<COMMENT>\*			            BEGIN COMMENT_END;
+<COMMENT_END>[^\/]	            BEGIN COMMENT;
+<COMMENT_END>\/		            BEGIN 0;
+
+ /* Whitespaces */
 [ \t\n]					        ;
 
 "if"                            return TOKEN(IF);
